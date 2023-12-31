@@ -1,6 +1,8 @@
 $( function(){
-    console.log("we are at the start");
-    
+    if (!window.PublicKeyCredential) {
+        $('#myForm').hide();
+        $('#passkeys-not-supported').show();
+    }
     // -------------------------------------
     //      Registration
     // -------------------------------------
@@ -59,10 +61,28 @@ $( function(){
     });
 
     // ----- Parsing and validating the registration data
+    console.log(credential.id); //todo remove, but look at the id, is it the same as the randomid? (its not written anywhere)
+    // decode the clientDataJSON into a utf-8 string
+    const utf8Decoder = new TextDecoder('utf-8');
+    const decodedClientData = utf8Decoder.decode(
+    credential.response.clientDataJSON)
+
+    // parse the string as an object
+    const clientDataObj = JSON.parse(decodedClientData);    //contains challenge, origin, type; we must validate these fields
+
+    console.log(clientDataObj);     //todo: remove
+
+    const decodedAttestationObj = CBOR.decode(credential.response.attestationObject);
+
+    console.log(decodedAttestationObj); //contatins authData (publickey), ftm (attestation format), attStmt (depends on the format)
 
     });
 
-    $("#auth-btn").click(function(ev) {
+    function getCredentialID(userName) {
+
+    }
+
+    $("#auth-btn").click(async function(ev) {
         var form = document.getElementById('myForm');
         if(form.checkValidity() === true) {
             ev.preventDefault();
@@ -73,8 +93,26 @@ $( function(){
         else {
             $("#not-successful").show();
             $("#success").hide();
-
             return;
         }
+
+
+        // creating publicKeyCredentialRequestOptions
+        let challenge = await window.crypto.getRandomValues(new Uint8Array(32));
+        let credentialId = getCredentialID(userName);
+        const publicKeyCredentialRequestOptions = {
+            challenge: challenge,
+            allowedCredentials: [{
+                id: credentialId,
+                type: 'public-key',
+                transports: ['usb', 'ble', 'nfc']
+            }],
+            timeout: 60000
+        };
+
+        const credentials = await navigator.credentials.get({
+            publickey: publicKeyCredentialRequestOptions
+        });
+
     });
 });
