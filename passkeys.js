@@ -7,6 +7,40 @@ $( function(){
     //      Registration
     // -------------------------------------
     
+    function getDatabase() {
+        const retrievedDB = JSON.parse(window.localStorage.getItem('myDatabase')) ?? [] ;
+        return retrievedDB;
+    }
+    
+    function getUsersWithSameName(userName){
+        const db = getDatabase();
+        let users = [];
+        db.forEach((user) => {
+            if (user.userName === userName)
+                user.push(user);
+        });
+        
+    }
+    
+    function getCredentials(userName) { //todo, nech to vracia array
+        let db = getDatabase();
+        const user = db.find(el => el.userName === userName);
+        if (user){
+            return true;
+        }
+        return false;
+    }
+
+    function getExcludeCredentials(userName) {
+        let users = getUsersWithSameName(userName);
+        let excludeCredentials = [];
+        users.forEach(user => {
+            excludeCredentials.push({"id": user.id});
+        });
+
+        return excludeCredentials;
+    }
+    
     $("#register-btn").click(async function(ev) {
         var form = document.getElementById('myForm');
         if(form.checkValidity() === true) {
@@ -19,8 +53,10 @@ $( function(){
             $("#success").hide();
             return;
         }
-        
+
         let userName = document.getElementById('input-user-name').value;
+        let excludeCredentials = getExcludeCredentials(userName);
+
         // -------------------------------------
         //      Creating credentials
         // -------------------------------------
@@ -48,17 +84,21 @@ $( function(){
                   type: "public-key",
                   alg: -257 // Value registered by this specification for "RS256"
                 }
-              ],
+            ],
             authenticatorSelection: {
-        authenticatorAttachment: "cross-platform",
-    },
-    timeout: 60000,
-    attestation: "direct"
+                authenticatorAttachment: "cross-platform",
+            },
+        timeout: 60000,
+        attestation: "direct"
     };
 
     const credential = await navigator.credentials.create({
         publicKey: PublicKeyCredentialCreateOptions
     });
+    
+    if (credential === null) {
+        //TODO: error message
+    }
 
     // ----- Parsing and validating the registration data
     console.log(credential.id); //todo remove, but look at the id, is it the same as the randomid? (its not written anywhere)
@@ -78,9 +118,6 @@ $( function(){
 
     });
 
-    function getCredentialID(userName) {
-
-    }
 
     $("#auth-btn").click(async function(ev) {
         var form = document.getElementById('myForm');
@@ -96,10 +133,13 @@ $( function(){
             return;
         }
 
+        let userName = document.getElementById('input-user-name').value;
 
         // creating publicKeyCredentialRequestOptions
         let challenge = await window.crypto.getRandomValues(new Uint8Array(32));
-        let credentialId = getCredentialID(userName);
+        let user = getCredentials(userName);
+        let credentialId = user.id;
+
         const publicKeyCredentialRequestOptions = {
             challenge: challenge,
             allowedCredentials: [{
