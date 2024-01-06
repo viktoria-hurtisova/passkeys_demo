@@ -5,99 +5,150 @@ let registerUserObj = {
     credentialId: null
 };
 
-import * as validator from "./validator.js"
-$( function(){
-    if (!window.PublicKeyCredential) {
-        $('#myForm').hide();
-        $('#passkeys-not-supported').show();
+function writeDebugInfo(text) {
+    let debugInfo = document.getElementById("debug_info");
+    debugInfo.innerHTML += text;
+}
+
+function parseClientDataJSON(input) {
+    const utf8Decoder = new TextDecoder('utf-8');
+    const decodedClientData = utf8Decoder.decode(input);
+    return JSON.parse(decodedClientData);
+}
+// the documentation about this part is Table 1 and Table 4
+// at https://www.w3.org/TR/webauthn-3/
+function parseAttestationObject(input) {
+    let result = {publicKey: null, credentialId: null};
+
+    let parsed = window.CBOR.decode(input); //TODO: look at the format
+
+    //we will get the public key from the authenticator data 
+    // and the subsection attestedCredentialData
+    let attCredData = parsed.authData.slice(35);
+    let credIdLength = attCredData.getUint16(16); // -> this should retrieve a Uint16 from the specified byte offset
+    result.credentialId = attCredData.slice(18, 18 + credIdLength);
+    let publicKeyBytes = attCredData.slice(18+credIdLength);
+    result.publicKey = window.CBOR.decode(publicKeyBytes);
+    //TODO: look at how the publicKeyObject looks -> if it has the required format
+    return result;
+}
+
+function validateAttestationResponse(registeredUserObj, res) {
+    let challenge = registeredUserObj.request.challenge;
+    let clientData = parseClientDataJSON(res.response.clientDataJSON);
+    write(challenge);
+    console.log(clientData);
+    write(Uint64Array.from(clientData.challenge, c => c.charCodeAt(0)))
+    //Verify that the value of clientData.challenge equals the base64url encoding of options.challenge.
+    if (b64enc(challenge) !== clientData.challenge) {
+        throw "validateAttestationResponse: The challenges are not equal!";
     }
-    // -------------------------------------
-    //      Registration
-    // -------------------------------------
+
+    if (window.location.origin !== clientData.origin) {
+        throw "validationAttestationResponse: The origins are not equal!";
+    }
+
+    if (clientData.hashAlg || clientData.hashAlgorithm) {
+        //TODO: mam si to niekde ulozit? je to tam vobec?
+        //Let hash be the result of computing a hash over response.clientDataJSON using SHA-256
+    }
+    if (clientData.type !== "webauthn.create"){
+        throw "validateAttestationResponse: The authenticator performed an incorrect operation."
+    }
+    //parse the attestation object
+    let parsedAttObj = parseAttestationObject(res.response.attestationObject);
+    registeredUserObj.publicKey = parsedAttObj.publicKey;
+    registeredUserObj.credentialId = parsedAttObj.credentialId;
     
-    
-    $("#register-btn").click(async function(ev) {
-        var form = document.getElementById('myForm');
-        if(form.checkValidity() === true) {
-            ev.preventDefault();
-            $("#success").show();
-            $("#not-successful").hide();
-        }
-        else {
-            $("#not-successful").show();
-            $("#success").hide();
-            return;
-        }
+}
+// authenticator data -> in table 1 -> contains attestedCredentialData
+//AttestedCredentialData -> section 6.5.2 -> there is also a table
 
-        let userName = document.getElementById('input-user-name').value;
-        
-        // -------------------------------------
-        //      Creating credentials
-        // -------------------------------------
+//todo https://prettier.io/ -> save, then ctrl+e
 
-        let challenge = await window.crypto.getRandomValues(new Uint8Array(16));
-        let randomId = await window.crypto.getRandomValues(new Uint8Array(16));
+async function getCreateOptions(userName){
 
-        const PublicKeyCredentialCreateOptions = {
-            challenge:  challenge, //should be at least 16 bytes
-            rp: {
-                name: "Security for SW Systems in practice",
-                id: "lioness-sacred-akita.ngrok-free.app/"
+    let challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    writeDebugInfo("challenge: " + challenge);
+    let randomId = window.crypto.getRandomValues(new Uint8Array(32));
+    writeDebugInfo("random id: " + randomId);
+
+    const PublicKeyCredentialCreateOptions = {
+        challenge:  challenge, //should be at least 16 bytes
+        rp: {
+            name: "Security for SW Systems in practice"
+        },
+        user: {
+            id: randomId,   //TODO: check in which format it should be from the documentation
+            name: userName,
+            displayName: userName
+        },
+        pubKeyCredParams: [
+            {
+              type: "public-key",
+              alg: -7 // "ES256" as registered in the IANA COSE Algorithms registry
             },
-            user: {
-                id: randomId,
-                name: userName,
-                displayName: userName
-            },
-            pubKeyCredParams: [
-                {
-                  type: "public-key",
-                  alg: -7 // "ES256" as registered in the IANA COSE Algorithms registry
-                },
-                {
-                  type: "public-key",
-                  alg: -257 // Value registered by this specification for "RS256"
-                }
-            ],
-            authenticatorSelection: {
-                authenticatorAttachment: "cross-platform",
-            },
-            timeout: 60000,
-            attestation: "direct"
-        };  
-        registerUserObj.request = PublicKeyCredentialCreateOptions;
+            {
+              type: "public-key",
+              alg: -257 // Value registered by this specification for "RS256"
+            }
+        ],
+        /*
+        excludeCredentials: [
+            // Don’t re-register any authenticator that has one of these credentials
+            {"id": Uint8Array.from(window.atob("ufJWp8YGlibm1Kd9XQBWN1WAw2jy5In2Xhon9HAqcXE="), c=>c.charCodeAt(0)), "type": "public-key"},
+            {"id": Uint8Array.from(window.atob("E/e1dhZc++mIsz4f9hb6NifAzJpF1V4mEtRlIPBiWdY="), c=>c.charCodeAt(0)), "type": "public-key"}
+          ],
+        */
+        //authenticatorSelection: {
+        //    authenticatorAttachment: "cross-platform",
+        //},
+        timeout: 60000,
+        attestation: "direct"
+    };  
 
-        await navigator.credentials.create({
-            publicKey: PublicKeyCredentialCreateOptions
-        }).then(function (credentials){
-            if (credentials !== null) {
-                // section 7.1. Registering a new credential    https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential
-               // Send credential info to server
-               registerUserObj.response = credentials;
-               validator.validateAttestationResponse(registerUserObj, credentials);
-               //TODO: save the registeredUserObj somewhere?
-            } 
+    return PublicKeyCredentialCreateOptions;
+}
 
-        }).catch(function(err){
-            // No acceptable authenticator or user refused consent
-        });
-        
+async function register(){
+    let userName = document.getElementById('input-user-name').value;
+    let PublicKeyCredentialCreateOptions = await getCreateOptions(userName);
+
+    registerUserObj.request = PublicKeyCredentialCreateOptions;
+
+    let credentials = await navigator.credentials.create({
+        publicKey: PublicKeyCredentialCreateOptions
     });
 
 
-    $("#auth-btn").click(async function(ev) {
-        var form = document.getElementById('myForm');
-        if(form.checkValidity() === true) {
-            ev.preventDefault();
-            $("#success").show();
-            $("#not-successful").hide();
+}
 
-        }
-        else {
-            $("#not-successful").show();
-            $("#success").hide();
-            return;
-        }
+async function authenticate() {
+
+}
+
+
+    // -------------------------------------
+    //      Registration
+    // -------------------------------------
+    function blabla(credentials){
+            if (credentials !== null) {
+                // section 7.1. Registering a new credential    https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential
+               // Send credential info to server
+               write("id from challenge: " + PublicKeyCredentialCreateOptions.id);
+               write("id from cred: " + credentials.id);
+               registerUserObj.response = credentials;
+               validateAttestationResponse(registerUserObj, credentials);
+               //TODO: save the registeredUserObj somewhere?
+            } 
+
+};
+        //.catch(function(err){
+            //writeDebugInfo("there was some error concerning the create func \t" + err);
+        //});
+        
+
+  async function bla2(ev) {
 
         let userName = document.getElementById('input-user-name').value;
 
@@ -143,7 +194,6 @@ $( function(){
         //todo: create signedData
         //todo verify
 
-    });
-});
+};
 
 //./mongoose.exe -d . -l http://0.0.0.0:8080
