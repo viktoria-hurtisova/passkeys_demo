@@ -1,8 +1,3 @@
-
-function isFormValid() {
-    
-}
-
 function displayError(message){
     document.getElementById('error').innerText = message;
     document.getElementById('error').style.display = "block";
@@ -21,6 +16,7 @@ function restore(){
     document.getElementById('passkeys-not-supported').style.display = "none";
 }
 
+
 // -------------------------------------
 //      Registration
 // -------------------------------------
@@ -34,15 +30,14 @@ registerBtn.addEventListener("click", async function(event) {
         return;
     }
     event.preventDefault();
-
+    
     try {
-        register();
+        await register();
+    document.getElementById('success-register').style.display = "block";
     } catch (e) {
         displayError(e.message);
     }
 
-    //TODO: this was success -> display success page
-    document.getElementById('success-register').style.display = "block";
 });
 
 
@@ -59,16 +54,17 @@ authBtn.addEventListener("click", async function(event) {
         return;
     }
     event.preventDefault();
+    await authenticate();
 
+    
     try {
-        authenticate();
+        //TODO: this was success -> display success page
+        document.getElementById('success-auth').style.display = "block";
+        document.getElementById('my-form').style.display = "none";
     } catch (e) {
         displayError(e.message);
     }
 
-    //TODO: this was success -> display success page
-    document.getElementById('success-auth').style.display = "block";
-    document.getElementById('my-form').style.display = "none";
 
 });
 
@@ -77,15 +73,13 @@ restoreBtn.addEventListener("click", function(event){
     restore();
 })
 
+// ----- test method
+
 let testBtn = document.getElementById('test-btn');
 testBtn.addEventListener("click", function(event){
-    let randomId = window.crypto.getRandomValues(new Uint8Array(32));
-    //writeDebugInfo("random id: " + randomId);
-    let documentationId = Uint8Array.from(window.atob("ufJWp8YGlibm1Kd9XQBWN1WAw2jy5In2Xhon9HAqcXE="), c=>c.charCodeAt(0));
-    //writeDebugInfo("documentation id: " + documentationId);
-    
-    writeDebugInfo("my id len: " + randomId.length + "   ");
-    writeDebugInfo("doc id len: " + documentationId.length + "   ");
-    
-
+    var initial = { Hello: "World" };
+    var encoded = CBOR.encode(initial);
+    console.log(encoded);
+    var decoded = CBOR.decode(encoded);
+    console.log(decoded);
 })
