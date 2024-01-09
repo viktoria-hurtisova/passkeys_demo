@@ -1,5 +1,5 @@
 const users = [];
-const RP_ID = "lioness-sacred-akita.ngrok-free.app";
+const RP_ID = window.location.host;
 
 //this function decode Base64url string into Uint8Array
 // from https://stackoverflow.com/questions/70652829/decode-base64url-as-uint8array
