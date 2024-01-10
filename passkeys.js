@@ -113,10 +113,10 @@ async function parsePublicKey(pubKey) {
       {
         //these are the algorithm options
         name: "ECDSA",
-        namedCurve: "P-256", //can be "P-256", "P-384", or "P-521"
+        namedCurve: "P-256",
       },
-      false, //whether the key is extractable (i.e. can be used in exportKey)
-      ["verify"] //"verify" for public key import, "sign" for private key imports
+      false,
+      ["verify"]
     );
   } else if (pubKey["1"] === 3) {
     //we are dealing with RD245
@@ -173,6 +173,23 @@ async function verify_rpIpHash(obj) {
   }
 }
 
+async function verifyFmt(fmt) {
+  console.log(fmt);
+  let supportedFmt = [
+    "packed",
+    "tpm",
+    "android-key",
+    "android-safetynet",
+    "fido-u2f",
+    "apple",
+    "none",
+  ];
+
+  if (!supportedFmt.includes(fmt)){
+    throw "This attestation format is not supported";
+  }
+}
+
 // -------------------------------------
 //      Registration
 // -------------------------------------
@@ -220,6 +237,7 @@ async function register() {
   ); //https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
 
   let attestationObject = CBOR.decode(response.attestationObject);
+  verifyFmt(attestationObject.fmt);
   verify_rpIpHash(attestationObject.authData);
   userRegistration.response.attestationObject = attestationObject;
 
